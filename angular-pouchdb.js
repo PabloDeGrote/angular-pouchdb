@@ -38,19 +38,19 @@ angular.module('pouchdb', [])
                   deferred = $q.defer(),
                   newRecord = function(response) {
 
-                  if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
-                      if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
-                          _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                      if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
+                          if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
+                              _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                          }
                       }
-                  }
 
-                  return $q.when(fn.apply(scope, scopeArguments)).then(function(resp) {
-                      deferred.resolve(resp);
-                  }).catch(function(err) {
-                      deferred.reject(err);
-                  });
+                      return $q.when(fn.apply(scope, scopeArguments)).then(function(resp) {
+                          deferred.resolve(resp);
+                      }).catch(function(err) {
+                          deferred.reject(err);
+                      });
 
-              };
+                  };
 
               if ( arguments.length === 1 ) {
                   // Set by ojbect: db.put({ _id: '_id', content: 'test'})
