@@ -22,7 +22,8 @@ angular.module('pouchdb', [])
   .provider('pouchDB', ["POUCHDB_DEFAULT_METHODS", function(POUCHDB_DEFAULT_METHODS) {
     this.methods = POUCHDB_DEFAULT_METHODS;
     this.$get = ["$q", "$window", function($q, $window) {
-      var methods = this.methods;
+      var methods = this.methods,
+      db;
 
       function qify(fn) {
         return function() {
@@ -41,7 +42,7 @@ angular.module('pouchdb', [])
 
                       if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
                           if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
-                              _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                              _object._rev = response._rev;           // PUT is an update, pass it on the _rev.
                           }
                       }
 
@@ -100,7 +101,7 @@ angular.module('pouchdb', [])
       }
 
       return function pouchDB(name, options) {
-        var db = new $window.PouchDB(name, options);
+        db = new $window.PouchDB(name, options);
         function wrap(method) {
             if(method === "put") {
                 db[method] = qify_put(db[method]);

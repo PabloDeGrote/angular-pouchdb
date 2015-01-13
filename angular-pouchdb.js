@@ -21,7 +21,8 @@ angular.module('pouchdb', [])
   .provider('pouchDB', function(POUCHDB_DEFAULT_METHODS) {
     this.methods = POUCHDB_DEFAULT_METHODS;
     this.$get = function($q, $window) {
-      var methods = this.methods;
+      var methods = this.methods,
+      db;
 
       function qify(fn) {
         return function() {
@@ -29,6 +30,9 @@ angular.module('pouchdb', [])
         };
       }
 
+      /*
+      ** Create an extended qify PUT() function that first tries to GET() the record and then pass on the revision value.
+      */
       function qify_put(fn) {
           return function() {
 
@@ -39,8 +43,8 @@ angular.module('pouchdb', [])
                   newRecord = function(response) {
 
                       if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
-                          if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
-                              _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                          if( angular.isDefined(response._rev) ) {    // If GET() failed then _rev is not defined, if GET() succeeeded, _rev will be defined.
+                              _object._rev = response._rev;           // PUT() is an update, pass on the _rev.
                           }
                       }
 
@@ -52,13 +56,11 @@ angular.module('pouchdb', [])
 
                   };
 
-              if ( arguments.length === 1 ) {
-                  // Set by ojbect: db.put({ _id: '_id', content: 'test'})
+              if ( arguments.length === 1 ) { // Set by ojbect: db.put({ _id: '_id', content: 'test'})
                   _id = arguments[0]._id || null;
                   _object = arguments[0] || {};
 
-              } else if( arguments.length === 2 || arguments.length === 3 ) {
-                  // Set by string: db.put({content: 'test'}, '_id') or db.put({content: 'test'}, '_id', '_rev')
+              } else if( arguments.length > 1 ) { // Set by string: db.put({content: 'test'}, '_id')
                   _id = arguments[1] || null;
                   _object = arguments[0] || {};
               }
@@ -99,7 +101,7 @@ angular.module('pouchdb', [])
       }
 
       return function pouchDB(name, options) {
-        var db = new $window.PouchDB(name, options);
+        db = new $window.PouchDB(name, options);
         function wrap(method) {
             if(method === "put") {
                 db[method] = qify_put(db[method]);
