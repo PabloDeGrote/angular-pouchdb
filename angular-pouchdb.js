@@ -33,10 +33,10 @@ angular.module('pouchdb', [])
           return function() {
 
               var scope = this,
-              scopeArguments = arguments,
-              _id, _object,
-              deferred = $q.defer(),
-              newRecord = function(response) {
+                  scopeArguments = arguments,
+                  _id, _object,
+                  deferred = $q.defer(),
+                  newRecord = function(response) {
 
                   if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
                       if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
@@ -50,7 +50,7 @@ angular.module('pouchdb', [])
                       deferred.reject(err);
                   });
 
-              }.bind(arguments);
+              };
 
               if ( arguments.length === 1 ) {
                   // Set by ojbect: db.put({ _id: '_id', content: 'test'})
