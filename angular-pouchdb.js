@@ -29,6 +29,46 @@ angular.module('pouchdb', [])
         };
       }
 
+      function qify_put(fn) {
+          return function() {
+
+              var scope = this,
+              scopeArguments = arguments,
+              _id, _object,
+              deferred = $q.defer(),
+              newRecord = function(response) {
+
+                  if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
+                      if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
+                          _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                      }
+                  }
+
+                  return $q.when(fn.apply(scope, scopeArguments)).then(function(resp) {
+                      deferred.resolve(resp);
+                  }).catch(function(err) {
+                      deferred.reject(err);
+                  });
+
+              }.bind(arguments);
+
+              if ( arguments.length === 1 ) {
+                  // Set by ojbect: db.put({ _id: '_id', content: 'test'})
+                  _id = arguments[0]._id || null;
+                  _object = arguments[0] || {};
+
+              } else if( arguments.length === 2 || arguments.length === 3 ) {
+                  // Set by string: db.put({content: 'test'}, '_id') or db.put({content: 'test'}, '_id', '_rev')
+                  _id = arguments[1] || null;
+                  _object = arguments[0] || {};
+              }
+
+              db.get(_id).then(newRecord).catch(newRecord);
+
+              return deferred.promise;
+          };
+      }
+
       function wrapEventEmitters(db) {
         function wrap(fn) {
           return function() {
@@ -61,7 +101,11 @@ angular.module('pouchdb', [])
       return function pouchDB(name, options) {
         var db = new $window.PouchDB(name, options);
         function wrap(method) {
-          db[method] = qify(db[method]);
+            if(method === "put") {
+                db[method] = qify_put(db[method]);
+            } else {
+                db[method] = qify(db[method]);
+            }
         }
         methods.forEach(wrap);
         return wrapEventEmitters(db);

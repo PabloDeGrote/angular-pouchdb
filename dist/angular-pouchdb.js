@@ -10,7 +10,6 @@ angular.module('pouchdb', [])
     'remove',
     'bulkDocs',
     'allDocs',
-    'sync',
     'putAttachment',
     'getAttachment',
     'removeAttachment',
@@ -22,53 +21,95 @@ angular.module('pouchdb', [])
   ])
   .provider('pouchDB', ["POUCHDB_DEFAULT_METHODS", function(POUCHDB_DEFAULT_METHODS) {
     this.methods = POUCHDB_DEFAULT_METHODS;
-    this.$get = ["$q", "$window", "$rootScope", function($q, $window, $rootScope) {
+    this.$get = ["$q", "$window", function($q, $window) {
       var methods = this.methods;
+
       function qify(fn) {
         return function() {
-          var deferred = $q.defer();
-          function callback(err, res) {
-            return $rootScope.$apply(function() {
-              if (err) {
-                return deferred.reject(err);
-              }
-              return deferred.resolve(res);
-            });
-          }
-          var args = [];
-          if (arguments !== null) {
-            args = Array.prototype.slice.call(arguments);
-          }
-          args.push(callback);
-          fn.apply(this, args);
-          return deferred.promise;
+          return $q.when(fn.apply(this, arguments));
         };
+      }
+
+      function qify_put(fn) {
+          return function() {
+
+              var scope = this,
+              scopeArguments = arguments,
+              _id, _object,
+              deferred = $q.defer(),
+              newRecord = function(response) {
+
+                  if ( !angular.isDefined(_object._rev) ) {       // Check if we have manually provided _rev, if yes, skip it.
+                      if( angular.isDefined(response._rev) ) {    // Is PUT an update or new document?
+                          _object._rev = response._rev;           // PUT is an update, pass on the _rev.
+                      }
+                  }
+
+                  return $q.when(fn.apply(scope, scopeArguments)).then(function(resp) {
+                      deferred.resolve(resp);
+                  }).catch(function(err) {
+                      deferred.reject(err);
+                  });
+
+              }.bind(arguments);
+
+              if ( arguments.length === 1 ) {
+                  // Set by ojbect: db.put({ _id: '_id', content: 'test'})
+                  _id = arguments[0]._id || null;
+                  _object = arguments[0] || {};
+
+              } else if( arguments.length === 2 || arguments.length === 3 ) {
+                  // Set by string: db.put({content: 'test'}, '_id') or db.put({content: 'test'}, '_id', '_rev')
+                  _id = arguments[1] || null;
+                  _object = arguments[0] || {};
+              }
+
+              db.get(_id).then(newRecord).catch(newRecord);
+
+              return deferred.promise;
+          };
+      }
+
+      function wrapEventEmitters(db) {
+        function wrap(fn) {
+          return function() {
+            var deferred = $q.defer();
+            var emitter = fn.apply(this, arguments)
+              .on('change', function(change) {
+                return deferred.notify(change);
+              })
+              .on('uptodate', function(uptodate) {
+                return deferred.notify(uptodate);
+              })
+              .on('complete', function(response) {
+                return deferred.resolve(response);
+              })
+              .on('error', function(error) {
+                return deferred.reject(error);
+              });
+            emitter.$promise = deferred.promise;
+            return emitter;
+          };
+        }
+
+        db.changes = wrap(db.changes);
+        db.replicate.to = wrap(db.replicate.to);
+        db.replicate.from = wrap(db.replicate.from);
+
+        return db;
       }
 
       return function pouchDB(name, options) {
         var db = new $window.PouchDB(name, options);
-
-        var api = {};
-        methods.forEach(function(method) {
-          api[method] = qify(db[method].bind(db));
-        });
-
-        api.changes = function(options) {
-          var clone = angular.copy(options);
-          clone.onChange = function(change) {
-            return $rootScope.$apply(function() {
-              return options.onChange(change);
-            });
-          };
-          return db.changes(clone);
-        };
-
-        api.replicate = {
-          to: db.replicate.to.bind(db),
-          from: db.replicate.from.bind(db)
-        };
-
-        return api;
+        function wrap(method) {
+            if(method === "put") {
+                db[method] = qify_put(db[method]);
+            } else {
+                db[method] = qify(db[method]);
+            }
+        }
+        methods.forEach(wrap);
+        return wrapEventEmitters(db);
       };
     }];
   }]);
